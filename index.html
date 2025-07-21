@@ -160,7 +160,15 @@
         import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, query, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Firebase configuration (provided by the Canvas environment)
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+         const firebaseConfig = {
+          apiKey: "AIzaSyBAQrKAvYdImmesBwWMgG1lK5wD5loZbFc", // <-- USE YOUR ACTUAL API KEY HERE
+          authDomain: "eplfantasytracker.firebaseapp.com", // <-- USE YOUR ACTUAL AUTH DOMAIN HERE
+          projectId: "eplfantasytracker", // <-- USE YOUR ACTUAL PROJECT ID HERE
+          storageBucket: "eplfantasytracker.firebasestorage.app", // <-- USE YOUR ACTUAL STORAGE BUCKET HERE
+          messagingSenderId: "725926054569", // <-- USE YOUR ACTUAL MESSAGING SENDER ID HERE
+          appId: "1:725926054569:web:0d3180840a9355e39237b8", // <-- USE YOUR ACTUAL APP ID HERE
+          // measurementId: "G-ABCDEFG" // Optional, uncomment if you have it
+        };
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-epl-tracker'; // Unique app ID
 
         // Initialize Firebase
