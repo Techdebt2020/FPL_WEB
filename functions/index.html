@@ -1,41 +1,41 @@
 // functions/index.js (for Netlify Functions)
-const fetch = require('node-fetch'); // For making HTTP requests from the function
-const cors = require('cors')(); // Enable CORS for the function
+// This file defines a serverless function that proxies requests to the FPL API.
+// It's designed to run on Netlify Functions.
+
+const fetch = require('node-fetch'); // Required for making HTTP requests to external APIs
+const cors = require('cors')(); // Middleware to handle Cross-Origin Resource Sharing
 
 /**
- * Netlify Function to proxy requests to the FPL API.
- * This bypasses CORS restrictions encountered in client-side applications.
+ * Main handler function for the Netlify serverless function.
+ * This function acts as a proxy to bypass CORS restrictions when accessing the FPL API
+ * from your frontend.
  *
- * It handles two main FPL API endpoints:
- * 1. /bootstrap-static/ (for current gameweek info)
- * 2. /leagues-classic/{league_id}/standings/ (for league standings)
- *
- * Requests to this function should include 'endpoint' as a query parameter
- * and 'leagueId' if the 'league-standings' endpoint is requested.
- *
- * Netlify Functions are accessed via /.netlify/functions/YOUR_FUNCTION_NAME
- * So, this function will be available at /.netlify/functions/fplProxy
- *
- * @param {object} event - The event object from Netlify (contains queryStringParameters)
- * @param {object} context - The context object from Netlify
- * @returns {object} - The response object
+ * @param {object} event - The event object contains information about the request,
+ * including query parameters (e.g., event.queryStringParameters).
+ * @param {object} context - The context object provides information about the invocation,
+ * function, and execution environment.
+ * @returns {object} - A response object with statusCode, headers, and body.
  */
 exports.handler = async (event, context) => {
-    // Netlify Functions automatically handle CORS if you use the `cors` middleware
-    // but we'll manually apply it here for consistency with the Firebase example
-    // and to ensure the response headers are correctly set.
+    // Netlify Functions often handle basic CORS automatically, but explicitly setting
+    // headers here ensures consistency and broad compatibility.
+    // We wrap the main logic in a Promise to correctly handle the `cors` middleware.
     return new Promise((resolve, reject) => {
+        // The `cors` middleware needs a Node.js `request` and `response` object.
+        // We're adapting the Netlify `event` and a custom `response` object for it.
         cors(event, {
+            // Custom `send` method for the `cors` middleware to resolve the Netlify response
             send: (body) => resolve({
                 statusCode: 200,
                 headers: {
                     "Content-Type": "application/json",
-                    "Access-Control-Allow-Origin": "*", // Allow all origins for simplicity, tighten in production
-                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type"
+                    "Access-Control-Allow-Origin": "*", // Allows requests from any origin (for development)
+                    "Access-Control-Allow-Methods": "GET, POST, OPTIONS", // Allowed HTTP methods
+                    "Access-Control-Allow-Headers": "Content-Type" // Allowed request headers
                 },
-                body: JSON.stringify(body)
+                body: JSON.stringify(body) // Stringify the JSON response body
             }),
+            // Custom `status` method for the `cors` middleware
             status: (statusCode) => ({
                 send: (body) => resolve({
                     statusCode: statusCode,
@@ -48,57 +48,61 @@ exports.handler = async (event, context) => {
                     body: JSON.stringify(body)
                 })
             })
-        }, async () => {
+        }, async () => { // This callback runs after CORS headers are handled
             const fplBaseUrl = 'https://fantasy.premierleague.com/api/';
+            // Extract the 'endpoint' and 'leagueId' from the query parameters
             const endpoint = event.queryStringParameters.endpoint;
             const leagueId = event.queryStringParameters.leagueId;
 
-            let fplApiUrl = '';
+            let fplApiUrl = ''; // Variable to hold the final FPL API URL
 
-            // Determine which FPL API endpoint to hit based on the 'endpoint' query parameter
+            // Construct the FPL API URL based on the requested endpoint
             if (endpoint === 'bootstrap-static') {
+                // Endpoint for general FPL data, including current gameweek
                 fplApiUrl = `${fplBaseUrl}bootstrap-static/`;
             } else if (endpoint === 'league-standings') {
+                // Endpoint for specific league standings, requires a league ID
                 if (!leagueId) {
-                    // If leagueId is missing for league-standings, return an error
+                    // Return a 400 error if leagueId is missing for this endpoint
                     resolve({
                         statusCode: 400,
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ error: 'Bad Request: leagueId is required for league-standings endpoint.' })
                     });
-                    return;
+                    return; // Exit the function
                 }
                 fplApiUrl = `${fplBaseUrl}leagues-classic/${leagueId}/standings/`;
             } else {
-                // If an invalid or missing endpoint is provided, return an error
+                // Return a 400 error for invalid or missing endpoint parameter
                 resolve({
                     statusCode: 400,
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ error: 'Bad Request: Invalid or missing "endpoint" parameter.' })
                 });
-                return;
+                return; // Exit the function
             }
 
             try {
-                // Make the request to the actual FPL API
+                // Make the actual request to the FPL API
                 const fplResponse = await fetch(fplApiUrl);
 
-                // Check if the FPL API response was successful
+                // Check if the response from FPL API was successful (status code 2xx)
                 if (!fplResponse.ok) {
                     const errorText = await fplResponse.text();
                     console.error(`FPL API returned an error: ${fplResponse.status} - ${errorText}`);
+                    // Forward the FPL API's error status and message to the client
                     resolve({
                         statusCode: fplResponse.status,
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ error: `Error from FPL API: ${fplResponse.statusText}` })
                     });
-                    return;
+                    return; // Exit the function
                 }
 
-                // Parse the JSON response from FPL API
+                // Parse the JSON response from the FPL API
                 const data = await fplResponse.json();
 
-                // Send the data back to the client
+                // Send the FPL data back to the client with a 200 OK status
                 resolve({
                     statusCode: 200,
                     headers: {
@@ -111,8 +115,9 @@ exports.handler = async (event, context) => {
                 });
 
             } catch (error) {
-                // Log and send any errors that occur during the fetch operation
+                // Catch any network or parsing errors during the fetch operation
                 console.error('Error fetching data from FPL API:', error);
+                // Send a 500 Internal Server Error response to the client
                 resolve({
                     statusCode: 500,
                     headers: { "Content-Type": "application/json" },
